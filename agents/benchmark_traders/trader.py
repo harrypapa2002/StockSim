@@ -509,6 +509,15 @@ class TraderAgent(Agent, ABC):
                         )
                         return
 
+                    if executed_qty < qty_requested:
+                        self.logger.warning(
+                            f"{role} requested {qty_requested}, executed {executed_qty}.  Cancelling remainder."
+                        )
+                        # send a cancellation to wipe out the rest
+                        order_id = trade_data.get("order_id")
+                        if order_id:
+                            await self.cancel_order(order_id)
+
                     executed_qty = cover_qty
                     pnl = 0.0
                     remaining = cover_qty
@@ -617,6 +626,15 @@ class TraderAgent(Agent, ABC):
                             f"SELL {qty_requested} {symbol} ignored - no long positions"
                         )
                         return
+
+                    if executed_qty < qty_requested:
+                        self.logger.warning(
+                            f"{role} requested {qty_requested}, executed {executed_qty}.  Cancelling remainder."
+                        )
+                        # send a cancellation to wipe out the rest
+                        order_id = trade_data.get("order_id")
+                        if order_id:
+                            await self.cancel_order(order_id)
 
                     pnl = 0.0
                     remaining = executed_qty
@@ -729,6 +747,24 @@ class TraderAgent(Agent, ABC):
         if exchange_id is None:
             self.logger.error(f"No exchange found for instrument {instrument}")
             return None
+
+        if side == "SELL" and not is_short:
+            held = self.long_qty[instrument]
+            if held <= 0:
+                self.logger.warning(f"Cannot sell {quantity} {instrument}: no long position")
+                return None
+            if quantity > held:
+                self.logger.warning(f"Trimming SELL {instrument} from {quantity} to {held} (held qty)")
+                quantity = held
+
+        if is_short_cover:
+            covered = self.short_qty[instrument]
+            if covered <= 0:
+                self.logger.warning(f"Cannot cover {quantity} {instrument}: no short position")
+                return None
+            if quantity > covered:
+                self.logger.warning(f"Trimming SHORT_COVER {instrument} from {quantity} to {covered}")
+                quantity = covered
 
         order_id = str(uuid.uuid4())
 
