@@ -25,6 +25,7 @@ metrics*/
 logs*/
 reports/
 configs/orders/
+charts/
 
 # IDE files
 .idea/
