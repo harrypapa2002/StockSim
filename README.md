@@ -1,6 +1,6 @@
 # StockSim: Multi-Agent LLM Financial Market Simulation Platform
 
-[![Project Demo](https://github.com/user-attachments/assets/b1b16e13-d1b8-441f-901d-dff50d60858b)](https://harrypapa2002.github.io/StockSim/)
+![image](https://github.com/user-attachments/assets/8fc30ca7-2746-4d91-a483-9e98a0fcff35)
 
 🔗 **Live Demo**: [harrypapa2002.github.io/StockSim](https://harrypapa2002.github.io/StockSim/)
 
