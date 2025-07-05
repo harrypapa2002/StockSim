@@ -1,5 +1,9 @@
 # StockSim: Multi-Agent LLM Financial Market Simulation Platform
 
+[![Project Demo](https://github.com/user-attachments/assets/b1b16e13-d1b8-441f-901d-dff50d60858b)](https://harrypapa2002.github.io/StockSim/)
+
+🔗 **Live Demo**: [harrypapa2002.github.io/StockSim](https://harrypapa2002.github.io/StockSim/)
+
 StockSim is a comprehensive, open-source simulation platform designed for systematic evaluation of Large Language Models (LLMs) in realistic financial decision-making environments. The platform provides unprecedented capabilities for studying LLM behavior in dynamic, multi-agent trading scenarios.
 
 ## 🌟 Key Features
