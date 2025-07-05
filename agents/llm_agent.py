@@ -944,6 +944,9 @@ class LLMTradingAgent(TraderAgent):
         if self.enable_fundamental_analyst and should_request_fundamentals:
             self._fundamentals_futures[instrument] = asyncio.get_event_loop().create_future()
 
+        self.logger.debug(f"Requesting market data for {instrument} from {exchange_id} "
+                          f"({window_start.isoformat()} to {window_end.isoformat()})")
+
         # Request data types based on enabled analysts and data source capabilities
         requests = [
             self.send_message(exchange_id, MessageType.MARKET_DATA_SNAPSHOT_REQUEST, payload)
@@ -1170,17 +1173,19 @@ class LLMTradingAgent(TraderAgent):
         self.logger.debug(f"Indicators received: {snapshot.get('indicators', {})}")
 
         # Market analysis (if market is open and analyst enabled)
+        bar_keys = ("open", "high", "low", "close", "volume")
+        has_ohlcv = all(data.get(k) is not None for k in bar_keys)
         market_task = None
-        if data and self.enable_market_analyst:
+        if has_ohlcv and self.enable_market_analyst:
             self.logger.debug(f"📊 Market data received for {instrument}: {data}")
             market_task = asyncio.create_task(
                 self.market_analyst.get_market_analysis(
                     instrument,
-                    data.get("open"),
-                    data.get("high"),
-                    data.get("low"),
-                    data.get("close"),
-                    data.get("volume"),
+                    data["open"],
+                    data["high"],
+                    data["low"],
+                    data["close"],
+                    data["volume"],
                     snapshot.get("indicators", {}),
                     data.get("vwap", None),
                     data.get("transactions")

@@ -52,6 +52,7 @@ class ExchangeAgent(Agent):
     def __init__(
         self,
         instrument: str,
+        resolution: str = "1m",
         agent_id: str = "exchange",
         rabbitmq_host: str = 'localhost',
         trades_output_file: Optional[str] = None,
@@ -64,7 +65,6 @@ class ExchangeAgent(Agent):
         data_end_date: Optional[str] = None,
         warmup_resolution: str = "1d",
         warmup_candles: int = 250,
-        resolutions: Optional[List[str]] = None,
     ):
         """
         Initialize the Real-Time Order Book Exchange Agent.
@@ -83,7 +83,6 @@ class ExchangeAgent(Agent):
             data_end_date: End date for indicator data (ISO format: YYYY-MM-DD)
             warmup_resolution: Candle resolution for warmup data (e.g., "1d", "1h", "5m")
             warmup_candles: Number of warmup candles (used for validation, default: 250)
-            resolutions: List of resolutions to aggregate trade data into (e.g., ["1m", "15m", "1h", "1d"])
         """
         super().__init__(agent_id=agent_id, rabbitmq_host=rabbitmq_host)
         self.instrument: str = instrument
@@ -122,18 +121,15 @@ class ExchangeAgent(Agent):
         self.warmup_resolution = warmup_resolution
         self.warmup_candles = warmup_candles
         
-        # Multi-resolution support
-        self.resolutions = resolutions or ["1m", "15m", "1h", "1d"]
-        self.resolution_seconds = {res: interval_to_seconds(res) for res in self.resolutions}
-        self.resolution_timedeltas = {res: parse_interval_to_timedelta(res) for res in self.resolutions}
-        
-        # Multi-resolution data storage - simplified to only store completed candles
-        self.resolution_candles: Dict[str, List[Dict[str, Any]]] = {res: [] for res in self.resolutions}
+        # Single base resolution approach
+        self.resolution = resolution
+        self.resolution_seconds = interval_to_seconds(resolution)
+        self.resolution_timedelta = parse_interval_to_timedelta(resolution)
 
-        # Initialize technical indicators tracker for each resolution
-        self.indicators_trackers: Dict[str, IndicatorsTracker] = {
-            res: IndicatorsTracker(**(indicator_kwargs or {})) for res in self.resolutions
-        }
+        self.synthetic_candles: List[Dict[str, Any]] = []
+
+        # Initialize single technical indicators tracker
+        self.indicators_tracker = IndicatorsTracker(**(indicator_kwargs or {}))
         
         # Load historical data for indicator warmup
         self._load_warmup_data()
@@ -146,6 +142,7 @@ class ExchangeAgent(Agent):
         self.trades_output_file = trades_output_file
 
         self.logger.info(f"ExchangeAgent {self.agent_id} initialized for instrument {self.instrument}.")
+
 
     def _load_fundamental_data(self):
         """Load fundamental data (stocks only - not available for crypto)."""
@@ -175,21 +172,19 @@ class ExchangeAgent(Agent):
 
     def _load_warmup_data(self):
         """
-        Load historical data for technical indicator warmup across all resolutions.
+        Load historical data for technical indicator warmup.
         
         This method loads historical candle data to initialize technical indicators
-        with sufficient historical context before real-time trading begins. Data is
-        loaded for each configured resolution to properly warm up all indicator trackers.
+        with sufficient historical context before real-time trading begins.
         """
         if not self.warmup_start_date or not self.warmup_end_date:
             self.logger.info("No warmup dates specified, skipping indicator warmup")
             return
             
-        self.logger.info(f"Starting multi-resolution indicator warmup for {self.instrument} from {self.warmup_start_date} to {self.warmup_end_date}")
+        self.logger.info(f"Starting indicator warmup for {self.instrument} from {self.warmup_start_date} to {self.warmup_end_date}")
         
-        # Load warmup data for each resolution
-        for resolution in self.resolutions:
-            self._load_warmup_data_for_resolution(resolution)
+        # Load warmup data for the base resolution
+        self._load_warmup_data_for_resolution(self.resolution)
     
     def _load_warmup_data_for_resolution(self, resolution: str):
         """
@@ -259,13 +254,9 @@ class ExchangeAgent(Agent):
                     }
                     formatted_candles.append(formatted_candle)
 
-                # Store historical candles for this resolution
-                self.resolution_candles[resolution] = formatted_candles
-                self.logger.info(f"Stored {len(formatted_candles)} historical candles for {resolution} resolution")
-
             # Warm up indicators for this resolution
             warmup_count = 0
-            indicators_tracker = self.indicators_trackers[resolution]
+            indicators_tracker = self.indicators_tracker
             
             for candle in historical_candles:
                 indicators_tracker.update(candle)
@@ -509,100 +500,6 @@ class ExchangeAgent(Agent):
             self.logger.warning(f"ExchangeAgent {self.agent_id} failed to cancel order {order_id} for agent {sender}.")
 
 
-    def _aggregate_trade_data_multi_resolution(
-        self,
-        window_start: datetime,
-        window_end: datetime,
-        resolution: str = "1d"
-    ) -> Dict[str, Any]:
-        """
-        Aggregate trade data and compute technical indicators for specified time window and resolution.
-        
-        This method enables comprehensive market analysis by computing OHLCV data,
-        technical indicators, and current order book state for LLM agent decision-making.
-        Uses resolution-specific IndicatorsTracker for technical analysis computations.
-
-        Args:
-            window_start: Start of aggregation time window
-            window_end: End of aggregation time window
-            resolution: Time resolution for aggregation (e.g., "1m", "15m", "1h", "1d")
-
-        Returns:
-            Dictionary containing aggregated data and technical indicators for the specified resolution
-        """
-        if resolution not in self.resolutions:
-            raise ValueError(f"Unsupported resolution: {resolution}. Available: {self.resolutions}")
-
-        # Get historical candles for this resolution using binary search for efficient filtering
-        historical_candles = self.resolution_candles.get(resolution, [])
-        filtered_historical_candles = []
-
-        if historical_candles:
-            # Use binary search to find candles within the time window
-            def candle_key(candle):
-                return parse_datetime_utc(candle["timestamp"])
-
-            # Find start index using binary search
-            start_index = bisect.bisect_left(
-                historical_candles,
-                window_start,
-                key=candle_key
-            )
-
-            # Find end index using binary search
-            end_index = bisect.bisect_right(
-                historical_candles,
-                window_end,
-                key=candle_key
-            )
-
-            # Extract candles in the time window
-            filtered_historical_candles = historical_candles[start_index:end_index]
-
-        # Get trades for this time window
-        trades = self.order_book.trade_history
-        start_index = trades.bisect_left({"timestamp": window_start, "seq": -1})
-        end_index = trades.bisect_right({"timestamp": window_end, "seq": float("inf")})
-        relevant_trades = list(trades[start_index:end_index])
-        
-        # Get current order book state
-        best_bid, bid_qty = self.order_book.get_best_bid()
-        best_ask, ask_qty = self.order_book.get_best_ask()
-        
-        # Create candles from trades for this resolution
-        trade_based_candles = self._create_candles_from_trades(
-            relevant_trades,
-            window_start,
-            window_end,
-            self.resolution_seconds[resolution]
-        )
-
-        # Combine historical candles with trade-based candles
-        # No overlap check needed since historical data is from warmup period
-        # and trade-based candles are from simulation period
-        all_candles = filtered_historical_candles + trade_based_candles
-
-        # Sort candles by timestamp (they should already be mostly sorted)
-        all_candles.sort(key=lambda x: parse_datetime_utc(x["timestamp"]))
-
-        # Get current technical indicators for this resolution
-        indicators = self.indicators_trackers[resolution].get_latest_values()
-
-        return {
-            "resolution": resolution,
-            "window_start": window_start.isoformat(),
-            "window_end": window_end.isoformat(),
-            "candles": all_candles,
-            "best_bid": best_bid,
-            "bid_quantity": bid_qty,
-            "best_ask": best_ask,
-            "ask_quantity": ask_qty,
-            "indicators": indicators,
-            "historical_candles_count": len(filtered_historical_candles),
-            "trade_based_candles_count": len(trade_based_candles),
-            "total_candles_count": len(all_candles)
-        }
-    
     def _create_candles_from_trades(
         self, 
         trades: List[Dict[str, Any]], 
@@ -685,59 +582,71 @@ class ExchangeAgent(Agent):
 
     async def _handle_market_data_snapshot_request(self, sender: Optional[str], payload: Dict[str, Any]):
         """
-        Process market data snapshot requests with multi-resolution technical indicator computation.
-        
-        Provides comprehensive market analysis data for LLM agent decision-making,
-        including OHLCV data, technical indicators, and current order book state
-        for the requested resolution.
-
-        Args:
-            sender: Agent ID requesting market data
-            payload: Request parameters including time window and resolution
+        Provide a single OHLCV bar (plus indicators and true top-of-book) for the requested window.
         """
         if not sender:
-            self.logger.error("MARKET_DATA_SNAPSHOT_REQUEST missing sender.")
             return
-            
+
         try:
             window_start = parse_datetime_utc(payload["window_start"])
             window_end = parse_datetime_utc(payload["window_end"])
         except (KeyError, ValueError) as e:
-            await self.send_message(sender, MessageType.ERROR, {"error": f"Invalid window parameters: {e}"})
+            self.logger.error(f"Invalid window params for MARKET_DATA_SNAPSHOT_REQUEST: {e}")
             return
 
-        # Extract resolution parameter (default to "1d" if not specified)
-        resolution = payload.get("resolution", "1d")
-        
-        if resolution not in self.resolutions:
-            await self.send_message(sender, MessageType.ERROR, {
-                "error": f"Unsupported resolution: {resolution}. Available: {self.resolutions}"
-            })
-            return
+        trades = self.order_book.trade_history
+        t0 = trades.bisect_left({"timestamp": window_start, "seq": -1})
+        t1 = trades.bisect_right({"timestamp": window_end, "seq": float("inf")})
+        relevant = list(trades[t0:t1])
 
-        try:
-            aggregated_data = self._aggregate_trade_data_multi_resolution(
-                window_start,
-                window_end,
-                resolution
-            )
-        except Exception as e:
-            await self.send_message(sender, MessageType.ERROR, {"error": f"Failed to aggregate data: {e}"})
-            return
+        live_candles = self._create_candles_from_trades(
+            relevant, window_start, window_end, self.resolution_seconds
+        )
+        self.logger.debug(f"Live candles: {live_candles}")
 
-        response_payload = {
+        if not live_candles:
+            data = {}
+        else:
+            opens = [c["open"] for c in live_candles]
+            highs = [c["high"] for c in live_candles]
+            lows = [c["low"] for c in live_candles]
+            closes = [c["close"] for c in live_candles]
+            vols = [c["volume"] for c in live_candles]
+
+            data = {
+                "open": opens[0],
+                "high": max(highs),
+                "low": min(lows),
+                "close": closes[-1],
+                "volume": sum(vols),
+            }
+            if all("vwap" in c and c["vwap"] is not None for c in live_candles):
+                v_sum, v_vol = 0, 0
+                for c in live_candles:
+                    v_sum += c["vwap"] * c["volume"]
+                    v_vol += c["volume"]
+                data["vwap"] = round(v_sum / v_vol, 6) if v_vol > 0 else None
+
+        # 4) Pull indicators & true top-of-book
+        indicators = self.indicators_tracker.get_latest_values()
+        best_bid, bid_qty = self.order_book.get_best_bid()
+        best_ask, ask_qty = self.order_book.get_best_ask()
+
+        resp = {
             "instrument": self.instrument,
             "window_start": window_start.isoformat(),
             "window_end": window_end.isoformat(),
-            "resolution": resolution,
-            "aggregated_data": aggregated_data,
-            "available_resolutions": self.resolutions
+            "data": data,
+            "indicators": indicators,
+            "best_bid": best_bid,
+            "bid_quantity": bid_qty,
+            "best_ask": best_ask,
+            "ask_quantity": ask_qty,
         }
-        await self.send_message(sender, MessageType.MARKET_DATA_SNAPSHOT_RESPONSE, response_payload)
-        self.logger.info(
-            f"ExchangeAgent {self.agent_id} responded to {sender} with {resolution} market data snapshot for "
-            f"window [{window_start}, {window_end}]."
-        )
+
+        await self.send_message(sender, MessageType.MARKET_DATA_SNAPSHOT_RESPONSE, resp)
+        self.logger.info(f"Sent snapshot to {sender}: {resp}")
+
 
     async def _handle_news_snapshot_request(self, sender: str, payload: Dict[str, Any]):
         """Handle news data requests with configurable news source support."""
@@ -1026,9 +935,9 @@ class ExchangeAgent(Agent):
         if not new_trades:
             return
 
-        # Update indicators for each resolution using only new trades
-        for resolution in self.resolutions:
-            await self._update_resolution_indicators(resolution, new_trades)
+        # Update indicators for the base resolution only
+        resolution = self.resolution
+        await self._update_resolution_indicators(resolution, new_trades)
 
         # Update the last processed trade key
         if new_trades:
@@ -1046,7 +955,7 @@ class ExchangeAgent(Agent):
         if not trades:
             return
 
-        resolution_seconds = self.resolution_seconds[resolution]
+        resolution_seconds = self.resolution_seconds
         current_time = self.current_time
 
         # Find the current candle period for this resolution
@@ -1079,12 +988,6 @@ class ExchangeAgent(Agent):
                 "volume": sum(volumes)
             }
 
-            # Update indicators for this resolution
-            self.indicators_trackers[resolution].update(synthetic_candle)
+            # Update indicators for the base resolution
+            self.indicators_tracker.update(synthetic_candle)
 
-            # Store completed candle if this is a new candle period
-            if (not self.resolution_candles[resolution] or
-                self.resolution_candles[resolution][-1]["timestamp"] != synthetic_candle["timestamp"]):
-
-                # Add the new candle to the history
-                self.resolution_candles[resolution].append(synthetic_candle.copy())

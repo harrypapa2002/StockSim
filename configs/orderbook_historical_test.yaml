@@ -15,7 +15,7 @@ exchanges:
     data_source: "polygon"
     symbol_type: "stock"
     warmup_candles: 0               # No warmup needed
-    resolutions: ["1m", "5m", "15m", "1h"]
+    candle_interval: "1m"  # High frequency for orderbook mode
 
 # Historical order traders - replay orders from order files
 agents:
@@ -24,30 +24,59 @@ agents:
     count: 1
     parameters:
       initial_cash: 100000
-      action_interval_seconds: 1    # Fast execution for orderbook mode
-      orders_file_path: "configs/orders/original_part0.json"
+      action_interval: "1m"   # Fast execution for orderbook mode
+      orders_file_path: "orders/original_part0.json"
 
   historical_trader_2:
     type: "HistoricalOrderTrader"
     count: 1
     parameters:
       initial_cash: 100000
-      action_interval_seconds: 1
-      orders_file_path: "configs/orders/original_part1.json"
+      action_interval: "1m"   # Fast execution for orderbook mode
+      orders_file_path: "orders/original_part1.json"
 
   historical_trader_3:
     type: "HistoricalOrderTrader"
     count: 1
     parameters:
       initial_cash: 100000
-      action_interval_seconds: 1
-      orders_file_path: "configs/orders/original_part2.json"
+      action_interval: "1m"   # Fast execution for orderbook mode
+      orders_file_path: "orders/original_part2.json"
+
+  Claude_Sonnet_Trader:
+    type: LLMTradingAgent
+    count: 1
+    parameters:
+      initial_cash: 100000
+      action_interval: "10m"  # Slower for LLM analysis
+      #
+      # —— Plug-and-play analyst models ——                            ▼ swap IDs!
+      models:
+        market_analysis:
+          model_id: "meta.llama3-1-405b-instruct-v1:0"
+          model_type: "llama"
+          temperature: 0.0
+          max_gen_len: 2000
+        aggregator:
+          model_id: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+          model_type: "anthropic"
+          use_thinking: true
+          max_tokens: 20000
+          budget_tokens: 16000
+      #
+      enable_market_analyst: true
+      enable_news_analyst: false
+      enable_fundamental_analyst: false
+      #
+      # Extra look-back windows
+      initial_positions: { AAPL: 0 }
+      initial_cost_basis: { AAPL: 140.0 }
 
 # Simulation parameters - short test period matching historical order timestamps
 simulation:
   start_time: "2025-03-01T09:30:00Z"
   end_time: "2025-03-01T16:00:00Z"        # Single trading day
-  tick_interval: "1s"                     # High frequency for orderbook testing
+  tick_interval: "1m"                     # High frequency for orderbook testing
   expected_exchange_agent_count: 1
 
 # Environment configuration

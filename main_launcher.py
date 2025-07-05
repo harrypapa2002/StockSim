@@ -591,8 +591,8 @@ def main():
             warmup_resolution = inst_cfg.get("warmup_resolution", "1d")
             warmup_candles = inst_cfg.get("warmup_candles", 250)
             
-            # Multi-resolution configuration
-            resolutions = inst_cfg.get("resolutions", ["1m", "15m", "1h", "1d"])
+            # Base resolution configuration (like candle-based exchange)
+            base_resolution = inst_cfg.get("candle_interval", "1m")
 
             exchange_params = {
                 "instrument": instrument,
@@ -608,7 +608,7 @@ def main():
                 "data_end_date": warmup_end_date or simulation_end_time,
                 "warmup_resolution": warmup_resolution,
                 "warmup_candles": warmup_candles,
-                "resolutions": resolutions
+                "resolution": base_resolution
             }
 
             p = Process(
