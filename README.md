@@ -319,23 +319,6 @@ python utils/plot_charts.py \
   --generate_report
 ```
 
-### Research Data Access
-```python
-# Access comprehensive metrics
-performance = agent.get_performance_metrics()
-research_summary = agent.get_research_summary()
-
-# Save research data
-await agent.save_research_data("output_dir")
-
-# Access decision history (LLM agents)
-for decision in agent.decision_history:
-    print(f"Time: {decision.timestamp}")
-    print(f"Decision: {decision.decision_text}")
-    print(f"Actions: {decision.parsed_actions}")
-    print(f"Context: {decision.market_context}")
-```
-
 ## 📋 Docker Commands Reference
 
 | Command | Description |
@@ -404,46 +387,6 @@ StockSim automatically computes comprehensive performance metrics:
 - **Response Quality**: Explanation coherence and accuracy
 - **Coordination Effectiveness**: Multi-agent collaboration patterns
 
-## 🛠️ Troubleshooting
-
-### Common Issues
-
-1. **RabbitMQ Connection Errors**
-   ```bash
-   # Check RabbitMQ status
-   docker ps | grep rabbitmq
-   
-   # Restart RabbitMQ
-   docker restart stocksim-rabbitmq
-   ```
-
-2. **API Key Issues**
-   ```bash
-   # Verify environment variables
-   docker exec -it stocksim-simulation env | grep API
-   
-   # Check API key validity
-   curl "https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/day/2023-01-01/2023-01-02?apikey=YOUR_KEY"
-   ```
-
-3. **Memory Issues**
-   ```bash
-   # Monitor resource usage
-   make monitor
-   
-   # Increase Docker memory limits in docker-compose.yml
-   mem_limit: 16g
-   ```
-
-4. **Configuration Errors**
-   ```bash
-   # Validate configuration
-   python -c "import yaml; yaml.safe_load(open('configs/config.yaml'))"
-   
-   # Check logs for validation errors
-   make logs | grep -i error
-   ```
-
 ## 📚 File Structure
 
 ```
@@ -502,18 +445,6 @@ We welcome contributions! Please:
 ## 📄 License
 
 StockSim is released under the MIT License. See LICENSE file for details.
-
-## 📞 Support
-
-- **GitHub Issues**: Bug reports and feature requests
-- **Discussions**: General questions and community support
-- **Documentation**: Inline code documentation and examples
-
-## 🔗 Related Work
-
-- **Paper**: "StockSim: A Dual-Mode Order-Level Simulator for Evaluating Multi-Agent LLMs in Financial Markets"
-- **Research Applications**: Multi-agent LLM coordination, financial decision-making, sequential reasoning
-- **Technical Implementation**: Production-grade simulation platform for NLP research
 
 ---
 
