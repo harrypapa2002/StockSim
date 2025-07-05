@@ -1,0 +1,38 @@
+# Core dependencies
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+requests>=2.28.0
+aio-pika>=9.0.0
+asyncio>=3.4.3
+
+# Financial data APIs
+alpha-vantage>=3.0.0
+polygon>=1.2.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+sortedcontainers>=2.4.0
+
+# Plotting and visualization
+plotly>=5.0.0
+
+# Date/time handling
+pytz>=2023.0
+
+# Web search functionality (if using news analyst)
+aiohttp>=3.8.0
+beautifulsoup4>=4.12.0
+
+# LLM dependencies (only if using LLM agents)
+openai>=1.0.0
+aiobotocore>=2.12.0
+torch>=2.0.0
+transformers>=4.30.0
+
+# Logging
+colorlog>=6.0.0
+
+# Template engine
+jinja2>=3.1.0

@@ -1,0 +1,19 @@
+**FUNDAMENTAL ANALYSIS UPDATE - {{ current_time }}**
+
+**LATEST FUNDAMENTAL DATA FOR {{ num_instruments }} INSTRUMENTS:**
+{% for instrument in instruments %}
+## {{ instrument.instrument }}
+{{ instrument.fundamental_data }}
+
+{% endfor %}
+
+**ANALYSIS REQUEST:**
+Provide updated fundamental analysis for all instruments considering:
+
+1. **Latest Financial Developments**: New financial reports, corporate events, or metric changes
+2. **Comparative Performance Updates**: Changes in relative financial positioning between companies
+3. **Valuation Adjustments**: Updated fair value assessments based on new fundamental data
+4. **Portfolio Impact Assessment**: How fundamental changes affect overall portfolio risk/return profile
+5. **Investment Thesis Updates**: Confirmation, modification, or reversal of previous investment recommendations
+
+Focus on actionable insights for multi-instrument portfolio fundamental management and any significant changes from previous analysis.

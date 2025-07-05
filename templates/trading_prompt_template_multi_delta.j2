@@ -1,0 +1,87 @@
+# PORTFOLIO UPDATE — MULTI-INSTRUMENT
+**Current:** {{ now }}
+
+Continue applying your elite portfolio management expertise across {{ total_instruments }} instruments.
+
+**Key Portfolio Constraints:**
+- Total available cash: ${{ portfolio_cash }}
+- Never exceed cash balance across all positions
+- Never short more than 50% of cash balance per instrument
+- **IMPORTANT**: Unfilled orders ALWAYS cancel at session close - resubmit to persist
+- All short positions must close before {{ window_end }}
+- SELL orders are automatically limited to current long holdings per instrument
+- SHORT_COVER orders are automatically limited to current short positions per instrument
+
+## CURRENT PORTFOLIO STATUS
+
+{% for instrument_data in instruments %}
+### {{ instrument_data.instrument }}
+
+**Market Data:**
+{% if instrument_data.market_open %}
+- Open: {{ instrument_data.open }} | High: {{ instrument_data.high }} | Low: {{ instrument_data.low }} | Close: {{ instrument_data.close }}
+- Volume: {{ instrument_data.volume }}
+{% else %}
+**MARKET CLOSED**
+- All outstanding orders canceled at session close
+- New orders will queue for next session open
+{% endif %}
+
+**Analyst Insights:**
+{% if instrument_data.market_analysis %}
+#### Market Analysis
+{{ instrument_data.market_analysis }}
+{% endif %}
+
+{% if instrument_data.news_analysis %}
+#### News Analysis
+{{ instrument_data.news_analysis }}
+{% endif %}
+
+{% if instrument_data.fund_analysis %}
+#### Fundamentals Analysis
+{{ instrument_data.fund_analysis }}
+{% endif %}
+
+**Position Status for {{ instrument_data.instrument }}:**
+- Long Shares: {{ instrument_data.shares_long }}
+- Short Shares: {{ instrument_data.shares_short }}
+- Net Position: {{ instrument_data.shares_net }}
+- Recent Activity: {{ instrument_data.executed_orders }}
+
+---
+{% endfor %}
+
+## PORTFOLIO ANALYSIS FOCUS
+
+**Multi-Instrument Update Goal:** Assess how latest developments across all instruments affect your portfolio thesis and identify optimal adjustments for enhanced performance.
+
+**Key Considerations:**
+- **Relative Performance**: Which instruments are showing strength/weakness relative to each other?
+- **Correlation Changes**: Are historical correlations holding or breaking down?
+- **Portfolio Balance**: Is current allocation still optimal given new information?
+- **Risk Management**: Are there emerging risks or concentration issues?
+- **Opportunities**: New pairs trades, rotation opportunities, or rebalancing needs?
+
+## YOUR DECISION
+
+**REQUIRED JSON FORMAT:**
+```json
+[
+  {
+    "instrument": "SYMBOL", 
+    "action": "BUY|SELL|SHORT|SHORT_COVER",
+    "orderType": "MARKET|LIMIT|STOP",
+    "price": "float|null",
+    "quantity": "integer|null",
+    "explanation": "reasoning that synthesizes new information with portfolio strategy and cross-instrument considerations"
+  }
+]
+```
+
+**Requirements:**
+- Always return JSON array (even single orders). If no action, return empty array `[]`.
+- Each order MUST include "instrument" field specifying which instrument to trade
+- Apply portfolio-level expertise to enhance end-of-window results
+- Maintain strategic discipline while adapting to market dynamics across all instruments
+- Consider cross-instrument impacts and portfolio optimization in all decisions

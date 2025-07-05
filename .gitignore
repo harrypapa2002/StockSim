@@ -1,0 +1,43 @@
+# StockSim .gitignore
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Logs and log directories
+logs_v1/
+*.log
+
+# Data files and caches
+data/
+*.csv
+*.json
+
+# Performance and metrics reports
+metrics*/
+logs*/
+reports/
+configs/orders/
+
+# IDE files
+.idea/
+*.iml
+
+# Docker files (keep docker-compose.yml but ignore overrides)
+docker-compose.override.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

@@ -1,0 +1,44 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: stocksim-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  stocksim:
+    build: .
+    container_name: stocksim-simulation
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - PYTHONPATH=/app
+    volumes:
+      # Mount directories for persistence and editing
+      - ./configs:/app/configs
+      - ./charts:/app/charts
+      - ./reports:/app/reports
+      - ./${LOG_DIR:-logs}:/app/${LOG_DIR:-logs}
+      - ./${METRICS_OUTPUT_DIR:-metrics}:/app/${METRICS_OUTPUT_DIR:-metrics}
+    working_dir: /app
+    stdin_open: true
+    tty: true
+    # Resource allocation for multi-instrument portfolio simulation
+    mem_limit: 8g
+    memswap_limit: 8g
+volumes:
+  rabbitmq_data:

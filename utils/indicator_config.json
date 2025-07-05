@@ -1,0 +1,16 @@
+{
+  "sma_periods": [20, 50, 100, 200],
+  "rsi_period": 14,
+  "ema_periods": [12, 26],
+  "atr_period": 14,
+  "macd_signal_period": 9,
+  "bb_multiplier": 2.0,
+  "peak_distance": 8,
+  "strong_peak_distance": 40,
+  "strong_peak_prominence": 15,
+  "peak_rank_width": 5,
+  "resistance_min_pivot_rank": 3,
+  "lookback": 200,
+  "num_bins": 100,
+  "value_area_pct": 0.7
+}

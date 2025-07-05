@@ -1,0 +1,115 @@
+# ── StockGSim Demo Config ───────────────────────────────────────────────
+# ❶ Change ONE flag to flip execution logic
+exchange_mode: "candle"          # ← swap to "orderbook" for micro-structure mode
+
+# ❷ Point at any asset (or five) with zero code edits
+instruments:
+  - NVDA
+  - AAPL # add more symbols here, e.g. BTCUSDT, AAPL …
+
+# ❸ Per-asset data & indicator knobs
+exchanges:
+  NVDA:
+    data_source: "polygon"       # "alpha_vantage" works too
+    symbol_type: "stock"         # "crypto" if you swap in BTC/ETH
+    candle_interval: "1d"        # 1m · 15m · 1h · 1d …
+    spread_factor: 0.001
+    warmup_candles: 200
+    indicator_kwargs:
+      sma_periods: [ 20, 50, 100, 200 ]
+      rsi_period: 14
+      ema_periods: [ 12, 26 ]
+      atr_period: 14
+      macd_signal_period: 9
+      bb_multiplier: 2
+      peak_distance: 8
+      strong_peak_distance: 40
+      strong_peak_prominence: 30
+      peak_rank_width: 15
+      resistance_min_pivot_rank: 3
+      lookback: 200
+      num_bins: 50
+      value_area_pct: 0.7
+    news:
+      tickers: ["NVDA"]
+      max_results: 10
+  AAPL:
+    data_source: "polygon"       # "alpha_vantage" works too
+    symbol_type: "stock"         # "crypto" if you swap in BTC/ETH
+    candle_interval: "1d"        # 1m · 15m · 1h · 1d …
+    spread_factor: 0.001
+    warmup_candles: 200
+    indicator_kwargs:
+      sma_periods: [ 20, 50, 100, 200 ]
+      rsi_period: 14
+      ema_periods: [ 12, 26 ]
+      atr_period: 14
+      macd_signal_period: 9
+      bb_multiplier: 2
+      peak_distance: 8
+      strong_peak_distance: 40
+      strong_peak_prominence: 30
+      peak_rank_width: 15
+      resistance_min_pivot_rank: 3
+      lookback: 200
+      num_bins: 50
+      value_area_pct: 0.7
+    news:
+      tickers: [ "AAPL" ]
+      max_results: 10
+
+# ❹ Agents: one LLM + one classical baseline
+agents:
+
+  Claude_Sonnet_Trader:
+    type: LLMTradingAgent
+    count: 1
+    parameters:
+      initial_cash: 100000
+      action_interval: "1d"
+      #
+      # —— Plug-and-play analyst models ——                            ▼ swap IDs!
+      models:
+        market_analysis:
+          model_id:  "meta.llama3-1-405b-instruct-v1:0"
+          model_type: "llama"
+          temperature: 0.0
+          max_gen_len: 2000
+        news:
+          model_id:  "us.anthropic.claude-sonnet-4-20250514-v1:0"
+          model_type: "anthropic"
+          use_web_search: true
+          temperature: 0.3
+          max_tokens: 10000
+          use_thinking: false
+        fundamental_analysis:
+          model_id:  "us.deepseek.r1-v1:0"
+          model_type: "deepseek"
+          temperature: 0.0
+        aggregator:
+          model_id:  "us.anthropic.claude-sonnet-4-20250514-v1:0"
+          model_type: "anthropic"
+          use_thinking: true
+          max_tokens: 20000
+          budget_tokens: 16000
+      #
+      enable_market_analyst:       true
+      enable_news_analyst:         true
+      enable_fundamental_analyst:  true
+      #
+      # Extra look-back windows (nice for the demo chart)
+      extended_intervals:
+        - { days: 730, label: "Macro",      resolution: "1mo" }
+        - { days: 180, label: "Mid-Term",   resolution: "1w"  }
+        - { days:  90, label: "Short-Term", resolution: "1d"  }
+      #
+      initial_positions: { NVDA: 0, AAPL: 0 }
+      initial_cost_basis: { NVDA: 140.0, AAPL: 170.0 }
+
+# ❺ Global run window (edit freely)
+simulation:
+  start_time: "2025-04-28T13:00:00"
+  end_time:   "2025-05-05T13:00:00"
+  tick_interval: "1d"
+  expected_exchange_agent_count: 2
+# ───────────────────────────────────────────────────────────────────────

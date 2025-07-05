@@ -1,0 +1,19 @@
+**NEWS SENTIMENT UPDATE - {{ current_time }}**
+
+**LATEST NEWS COVERAGE FOR {{ num_instruments }} INSTRUMENTS:**
+{% for instrument in instruments %}
+## {{ instrument.instrument }} ({{ instrument.news_count }} news items)
+{{ instrument.joined_news }}
+
+{% endfor %}
+
+**ANALYSIS REQUEST:**
+Provide updated sentiment analysis for all instruments considering:
+
+1. **Latest Sentiment Developments**: New sentiment shifts based on recent news
+2. **Cross-Instrument Sentiment Patterns**: Changes in correlations or divergences between instruments
+3. **Momentum Assessment**: Whether sentiment is accelerating, decelerating, or reversing
+4. **Portfolio Sentiment Risk**: Overall sentiment exposure and concentration risks
+5. **Market Context**: How instrument-specific sentiment fits into broader market narrative
+
+Focus on actionable insights for multi-instrument portfolio sentiment management and any significant changes from previous analysis.

@@ -1,0 +1,69 @@
+# TRADING UPDATE — {{ instrument }}
+**Current:** {{ now }}
+
+Continue applying your elite trading expertise to {{ instrument }}.
+
+**Key Constraints:**
+- Never exceed cash balance (${{ portfolio_cash }})
+- Never short more than 100% of cash balance
+- **IMPORTANT**: Unfilled orders ALWAYS cancel at session close - resubmit to persist
+- All short positions must close before {{ window_end }}
+- SELL orders are automatically limited to current long holdings - overselling is impossible
+- SHORT_COVER orders are automatically limited to current short positions - over-covering is impossible
+
+## CURRENT CONTEXT
+
+**Market Data:**
+{% if market_open %}
+- Open: {{ open }} | High: {{ high }} | Low: {{ low }} | Close: {{ close }}
+- Volume: {{ volume }}
+{% else %}
+**MARKET CLOSED**
+- All outstanding orders canceled at session close
+- New orders will queue for next session open
+{% endif %}
+
+**Analyst Insights:**
+{% if market_analysis %}
+### Market Analysis
+{{ market_analysis }}
+{% endif %}
+
+{% if news_analysis %}
+### News Analysis
+{{ news_analysis }}
+{% endif %}
+
+{% if fund_analysis %}
+### Fundamentals Analysis
+{{ fund_analysis }}
+{% endif %}
+
+**Portfolio Status:**
+- Long Shares: {{ shares_long }}
+- Short Shares: {{ shares_short }}
+- Net Position: {{ shares_net }}
+- Available Cash: ${{ portfolio_cash }}
+- Recent Activity: {{ executed_orders | default("None") }}
+
+## YOUR DECISION
+
+**Strategic Update Goal:** Consider if and how latest developments affect your thesis and if any adjustments are needed best enhance portfolio performance.
+
+**REQUIRED JSON FORMAT:**
+```json
+[
+  {
+    "action": "BUY|SELL|SHORT|SHORT_COVER",
+    "orderType": "MARKET|LIMIT|STOP",
+    "price": "float|null",
+    "quantity": "integer|null",
+    "explanation": "reasoning that synthesizes new information with your ongoing strategy"
+  }
+]
+```
+
+**Requirements:**
+- Always return JSON array (even single orders). If no action, return empty array `[]`.
+- Apply expertise to enhance end-of-window results
+- Maintain strategic discipline while adapting to market dynamics

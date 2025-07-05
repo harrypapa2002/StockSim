@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockSim Exchange Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            font-weight: 300;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .connection-status {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e74c3c;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background-color: #27ae60;
+            box-shadow: 0 0 10px rgba(39, 174, 96, 0.5);
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .controls {
+            background: #f8f9fa;
+            padding: 25px 30px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .instrument-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .instrument-badge {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .time-display {
+            background: #2c3e50;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 0.95rem;
+        }
+
+        .resolution-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .resolution-btn {
+            background: white;
+            border: 2px solid #3498db;
+            color: #3498db;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .resolution-btn:hover {
+            background: #3498db;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .resolution-btn.active {
+            background: #3498db;
+            color: white;
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .chart-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .chart-header {
+            background: linear-gradient(135deg, #34495e, #2c3e50);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chart-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .chart-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            opacity: 0.7;
+        }
+
+        .stat-value {
+            font-weight: bold;
+        }
+
+        .chart-plot {
+            height: 400px;
+            padding: 10px;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+            flex-direction: column;
+            gap: 20px;
+            color: #7f8c8d;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #ecf0f1;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-data {
+            text-align: center;
+            color: #7f8c8d;
+            padding: 40px;
+            font-style: italic;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .order-book-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .order-book-container:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .order-book-header {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .order-book-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .order-book-content {
+            padding: 25px;
+        }
+
+        .order-book-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border-left: 4px solid #3498db;
+            transition: transform 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-bottom: 8px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: #2c3e50;
+            font-family: monospace;
+        }
+
+        .metric-value.bid {
+            color: #27ae60;
+        }
+
+        .metric-value.ask {
+            color: #e74c3c;
+        }
+
+        .metric-value.spread {
+            color: #f39c12;
+        }
+
+        .bid-ask-display {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 20px;
+            align-items: center;
+            background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .bid-side, .ask-side {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .bid-side {
+            background: rgba(39, 174, 96, 0.1);
+            border: 2px solid #27ae60;
+        }
+
+        .ask-side {
+            background: rgba(231, 76, 60, 0.1);
+            border: 2px solid #e74c3c;
+        }
+
+        .side-label {
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .side-price {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-family: monospace;
+        }
+
+        .side-quantity {
+            font-size: 1rem;
+            color: #7f8c8d;
+            font-family: monospace;
+        }
+
+        .spread-indicator {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spread-arrow {
+            font-size: 2rem;
+            color: #f39c12;
+            margin-bottom: 10px;
+        }
+
+        .spread-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #f39c12;
+            font-family: monospace;
+        }
+
+        .spread-label {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        @media (max-width: 768px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+                padding: 15px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .resolution-controls {
+                justify-content: center;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <div class="connection-status">
+                <div class="status-indicator" id="connectionStatus"></div>
+                <span id="connectionText">Disconnected</span>
+            </div>
+            <h1>StockSim Exchange Dashboard</h1>
+            <div class="subtitle">Real-time candle visualization across multiple resolutions</div>
+        </div>
+
+        <div class="controls">
+            <div class="instrument-info">
+                <div class="instrument-badge" id="instrumentBadge">Loading...</div>
+                <div class="time-display" id="timeDisplay">--:--:--</div>
+            </div>
+            <div class="resolution-controls" id="resolutionControls">
+                <!-- Resolution buttons will be populated here -->
+            </div>
+        </div>
+
+        <div class="chart-grid" id="chartGrid">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div>Connecting to exchange agent...</div>
+            </div>
+        </div>
+
+        <!-- Order Book Section -->
+        <div id="orderBookSection" style="display: none; padding: 0 30px 30px;">
+            <div class="order-book-container">
+                <div class="order-book-header">
+                    <h3>Order Book</h3>
+                </div>
+                <div class="order-book-content">
+                    <div class="bid-ask-display">
+                        <div class="bid-side">
+                            <div class="side-label" style="color: #27ae60;">BID</div>
+                            <div class="side-price" style="color: #27ae60;" id="bidPrice">$0.00</div>
+                            <div class="side-quantity" id="bidQuantity">0 shares</div>
+                        </div>
+                        <div class="spread-indicator">
+                            <div class="spread-arrow">↔</div>
+                            <div class="spread-value" id="spreadValue">$0.00</div>
+                            <div class="spread-label">Spread</div>
+                        </div>
+                        <div class="ask-side">
+                            <div class="side-label" style="color: #e74c3c;">ASK</div>
+                            <div class="side-price" style="color: #e74c3c;" id="askPrice">$0.00</div>
+                            <div class="side-quantity" id="askQuantity">0 shares</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>StockSim Exchange Dashboard - Real-time Market Data Visualization</p>
+        </div>
+    </div>
+
+    <script>
+        class ExchangeDashboard {
+            constructor() {
+                this.ws = null;
+                this.reconnectInterval = 5000;
+                this.maxReconnectAttempts = 10;
+                this.reconnectAttempts = 0;
+                this.instrument = '';
+                this.resolutions = [];
+                this.candleData = {};
+                this.activeResolution = null;
+                this.charts = {};
+                this.colors = {
+                    bullish: '#26A69A',
+                    bearish: '#EF5350',
+                    volume: 'rgba(70, 130, 180, 0.6)',
+                    grid: '#E0E0E0'
+                };
+                
+                this.connect();
+                this.setupEventListeners();
+                this.updateTime();
+                setInterval(() => this.updateTime(), 1000);
+            }
+
+            connect() {
+                try {
+                    this.ws = new WebSocket('ws://localhost:8765');
+                    
+                    this.ws.onopen = () => {
+                        console.log('Connected to exchange agent');
+                        this.updateConnectionStatus(true);
+                        this.reconnectAttempts = 0;
+                        
+                        // Send ping to keep connection alive
+                        this.sendPing();
+                        setInterval(() => this.sendPing(), 30000);
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            console.error('Error parsing message:', error);
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        console.log('Connection closed');
+                        this.updateConnectionStatus(false);
+                        this.attemptReconnect();
+                    };
+
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateConnectionStatus(false);
+                    };
+
+                } catch (error) {
+                    console.error('Failed to create WebSocket connection:', error);
+                    this.updateConnectionStatus(false);
+                    this.attemptReconnect();
+                }
+            }
+
+            sendPing() {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }
+
+            attemptReconnect() {
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    setTimeout(() => this.connect(), this.reconnectInterval);
+                } else {
+                    console.log('Max reconnection attempts reached');
+                    document.getElementById('chartGrid').innerHTML = 
+                        '<div class="no-data">Connection failed. Please refresh the page.</div>';
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                const statusIndicator = document.getElementById('connectionStatus');
+                const statusText = document.getElementById('connectionText');
+                
+                if (connected) {
+                    statusIndicator.classList.add('connected');
+                    statusText.textContent = 'Connected';
+                } else {
+                    statusIndicator.classList.remove('connected');
+                    statusText.textContent = 'Disconnected';
+                }
+            }
+
+            handleMessage(data) {
+                switch (data.type) {
+                    case 'initial_data':
+                        this.handleInitialData(data);
+                        break;
+                    case 'candle_update':
+                        this.handleCandleUpdate(data);
+                        break;
+                    case 'pong':
+                        // Keep-alive response
+                        break;
+                    case 'order_book':
+                        this.handleOrderBookUpdate(data);
+                        break;
+                    default:
+                        console.log('Unknown message type:', data.type);
+                }
+            }
+
+            handleInitialData(data) {
+                this.instrument = data.instrument;
+                this.resolutions = data.resolutions || [];
+                this.candleData = data.candles || {};
+                
+                // Update UI
+                document.getElementById('instrumentBadge').textContent = this.instrument;
+                this.createResolutionControls();
+                this.createCharts();
+
+                // Handle order book data if available
+                if (data.order_book) {
+                    this.updateOrderBookDisplay(data.order_book);
+                }
+
+                // Set default active resolution
+                if (this.resolutions.length > 0) {
+                    this.setActiveResolution(this.resolutions[0]);
+                }
+            }
+
+            updateOrderBookDisplay(orderBook) {
+                // Update order book display with the existing data structure
+                const bidPrice = orderBook.best_bid;
+                const askPrice = orderBook.best_ask;
+                const bidQty = orderBook.bid_quantity;
+                const askQty = orderBook.ask_quantity;
+                const spread = orderBook.spread;
+
+                // Update display elements
+                if (bidPrice !== null && bidPrice !== undefined) {
+                    document.getElementById('bidPrice').textContent = `$${bidPrice.toFixed(2)}`;
+                    document.getElementById('bidQuantity').textContent = `${bidQty || 0} shares`;
+                } else {
+                    document.getElementById('bidPrice').textContent = 'N/A';
+                    document.getElementById('bidQuantity').textContent = '0 shares';
+                }
+
+                if (askPrice !== null && askPrice !== undefined) {
+                    document.getElementById('askPrice').textContent = `$${askPrice.toFixed(2)}`;
+                    document.getElementById('askQuantity').textContent = `${askQty || 0} shares`;
+                } else {
+                    document.getElementById('askPrice').textContent = 'N/A';
+                    document.getElementById('askQuantity').textContent = '0 shares';
+                }
+
+                if (spread !== null && spread !== undefined) {
+                    document.getElementById('spreadValue').textContent = `$${spread.toFixed(4)}`;
+                } else {
+                    document.getElementById('spreadValue').textContent = 'N/A';
+                }
+
+                // Show order book section
+                document.getElementById('orderBookSection').style.display = 'block';
+            }
+
+            handleCandleUpdate(data) {
+                if (data.instrument === this.instrument) {
+                    const resolution = data.resolution;
+                    const candle = data.candle;
+                    
+                    // Update candle data
+                    if (!this.candleData[resolution]) {
+                        this.candleData[resolution] = [];
+                    }
+                    
+                    // Check if this is an update to the last candle or a new candle
+                    const lastCandle = this.candleData[resolution][this.candleData[resolution].length - 1];
+                    if (lastCandle && lastCandle.timestamp === candle.timestamp) {
+                        // Update existing candle
+                        this.candleData[resolution][this.candleData[resolution].length - 1] = candle;
+                    } else {
+                        // Add new candle
+                        this.candleData[resolution].push(candle);
+                        
+                        // Keep only last 200 candles for performance
+                        if (this.candleData[resolution].length > 200) {
+                            this.candleData[resolution] = this.candleData[resolution].slice(-200);
+                        }
+                    }
+                    
+                    // Update chart if this resolution is currently displayed
+                    if (this.activeResolution === resolution) {
+                        this.updateChart(resolution);
+                    }
+                }
+            }
+
+            handleOrderBookUpdate(data) {
+                // Handle real-time order book updates if they are sent
+                if (data.order_book) {
+                    this.updateOrderBookDisplay(data.order_book);
+                }
+            }
+
+            createResolutionControls() {
+                const container = document.getElementById('resolutionControls');
+                container.innerHTML = '';
+                
+                this.resolutions.forEach(resolution => {
+                    const button = document.createElement('button');
+                    button.className = 'resolution-btn';
+                    button.textContent = this.formatResolution(resolution);
+                    button.onclick = () => this.setActiveResolution(resolution);
+                    container.appendChild(button);
+                });
+            }
+
+            setActiveResolution(resolution) {
+                // Update active resolution
+                this.activeResolution = resolution;
+                
+                // Update button states
+                document.querySelectorAll('.resolution-btn').forEach((btn, index) => {
+                    if (this.resolutions[index] === resolution) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                
+                // Update chart
+                this.updateChart(resolution);
+            }
+
+            createCharts() {
+                const chartGrid = document.getElementById('chartGrid');
+                chartGrid.innerHTML = `
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title">
+                                ${this.instrument} - <span id="chartResolution">Select Resolution</span>
+                            </div>
+                            <div class="chart-stats">
+                                <div class="stat">
+                                    <div class="stat-label">Candles</div>
+                                    <div class="stat-value" id="candleCount">0</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-label">Last Price</div>
+                                    <div class="stat-value" id="lastPrice">$0.00</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-label">Volume</div>
+                                    <div class="stat-value" id="lastVolume">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-plot" id="mainChart"></div>
+                    </div>
+                `;
+            }
+
+            updateChart(resolution) {
+                const candles = this.candleData[resolution] || [];
+                
+                if (candles.length === 0) {
+                    document.getElementById('mainChart').innerHTML = 
+                        '<div class="no-data">No candle data available for this resolution</div>';
+                    return;
+                }
+
+                // Update chart header
+                document.getElementById('chartResolution').textContent = this.formatResolution(resolution);
+                document.getElementById('candleCount').textContent = candles.length;
+                
+                if (candles.length > 0) {
+                    const lastCandle = candles[candles.length - 1];
+                    document.getElementById('lastPrice').textContent = `$${lastCandle.close.toFixed(2)}`;
+                    document.getElementById('lastVolume').textContent = this.formatNumber(lastCandle.volume);
+                }
+
+                // Prepare data for plotting
+                const times = candles.map(c => c.timestamp);
+                const opens = candles.map(c => c.open);
+                const highs = candles.map(c => c.high);
+                const lows = candles.map(c => c.low);
+                const closes = candles.map(c => c.close);
+                const volumes = candles.map(c => c.volume);
+
+                // Create candlestick trace
+                const candlestickTrace = {
+                    x: times,
+                    open: opens,
+                    high: highs,
+                    low: lows,
+                    close: closes,
+                    type: 'candlestick',
+                    name: 'Price',
+                    increasing: { line: { color: this.colors.bullish } },
+                    decreasing: { line: { color: this.colors.bearish } },
+                    xaxis: 'x',
+                    yaxis: 'y'
+                };
+
+                // Create volume trace
+                const volumeTrace = {
+                    x: times,
+                    y: volumes,
+                    type: 'bar',
+                    name: 'Volume',
+                    marker: { color: this.colors.volume },
+                    xaxis: 'x',
+                    yaxis: 'y2',
+                    opacity: 0.7
+                };
+
+                const data = [candlestickTrace, volumeTrace];
+
+                const layout = {
+                    title: '',
+                    xaxis: {
+                        domain: [0, 1],
+                        rangeslider: { visible: false },
+                        type: 'date'
+                    },
+                    yaxis: {
+                        domain: [0.3, 1],
+                        title: 'Price ($)'
+                    },
+                    yaxis2: {
+                        domain: [0, 0.25],
+                        title: 'Volume',
+                        side: 'right'
+                    },
+                    margin: { l: 60, r: 60, t: 20, b: 60 },
+                    plot_bgcolor: 'white',
+                    paper_bgcolor: 'white',
+                    font: { family: 'Arial, sans-serif', size: 12 },
+                    showlegend: false,
+                    hovermode: 'x unified'
+                };
+
+                const config = {
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+                    responsive: true
+                };
+
+                Plotly.newPlot('mainChart', data, layout, config);
+            }
+
+            formatResolution(resolution) {
+                // Convert resolution string to display format
+                const timeUnits = {
+                    's': 'sec',
+                    'm': 'min', 
+                    'h': 'hr',
+                    'd': 'day',
+                    'w': 'wk',
+                    'M': 'mo'
+                };
+                
+                const match = resolution.match(/(\d+)([a-zA-Z]+)/);
+                if (match) {
+                    const [, number, unit] = match;
+                    const displayUnit = timeUnits[unit] || unit;
+                    return `${number}${displayUnit}`;
+                }
+                return resolution;
+            }
+
+            formatNumber(num) {
+                if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+                if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+                if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+                return num.toString();
+            }
+
+            updateTime() {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString();
+                document.getElementById('timeDisplay').textContent = timeString;
+            }
+
+            setupEventListeners() {
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    if (this.activeResolution) {
+                        setTimeout(() => this.updateChart(this.activeResolution), 100);
+                    }
+                });
+            }
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new ExchangeDashboard();
+        });
+    </script>
+</body>
+</html>

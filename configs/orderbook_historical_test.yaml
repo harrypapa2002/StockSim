@@ -1,0 +1,57 @@
+# ── StockSim Orderbook Historical Test Config ──────────────────────────
+# Test configuration for orderbook mode with historical order traders
+# No warmup data, pure historical order replay
+
+# Exchange mode - use orderbook for real-time order matching
+exchange_mode: "orderbook"
+
+# Instruments - using AAPL as it has historical orders available
+instruments:
+  - AAPL
+
+# Exchange configuration - no warmup data needed for historical replay
+exchanges:
+  AAPL:
+    data_source: "polygon"
+    symbol_type: "stock"
+    warmup_candles: 0               # No warmup needed
+    resolutions: ["1m", "5m", "15m", "1h"]
+    dashboard_port: 8765
+
+# Historical order traders - replay orders from order files
+agents:
+  historical_trader_1:
+    type: "HistoricalOrderTrader"
+    count: 1
+    parameters:
+      initial_cash: 100000
+      action_interval_seconds: 1    # Fast execution for orderbook mode
+      orders_file_path: "configs/orders/original_part0.json"
+
+  historical_trader_2:
+    type: "HistoricalOrderTrader"
+    count: 1
+    parameters:
+      initial_cash: 100000
+      action_interval_seconds: 1
+      orders_file_path: "configs/orders/original_part1.json"
+
+  historical_trader_3:
+    type: "HistoricalOrderTrader"
+    count: 1
+    parameters:
+      initial_cash: 100000
+      action_interval_seconds: 1
+      orders_file_path: "configs/orders/original_part2.json"
+
+# Simulation parameters - short test period matching historical order timestamps
+simulation:
+  start_time: "2025-03-01T09:30:00Z"
+  end_time: "2025-03-01T16:00:00Z"        # Single trading day
+  tick_interval: "1s"                     # High frequency for orderbook testing
+  expected_exchange_agent_count: 1
+
+# Environment configuration
+environment:
+  rabbitmq_host: "localhost"
+  log_level: "INFO"

@@ -1,0 +1,20 @@
+**MARKET UPDATE - {{ current_time }}**
+
+**CURRENT MARKET DATA FOR {{ num_instruments }} INSTRUMENTS:**
+{% for instrument in instruments %}
+## {{ instrument.instrument }}
+- Open: ${{ instrument.open_price }} | High: ${{ instrument.high_price }} | Low: ${{ instrument.low_price }} | Close: ${{ instrument.close_price }}
+- Volume: {{ instrument.volume }} | VWAP: {{ instrument.vwap_str }} | Transactions: {{ instrument.transactions }}
+- Technical Indicators: {{ instrument.formatted_indicators }}
+
+{% endfor %}
+
+**ANALYSIS REQUEST:**
+Provide updated technical analysis for all instruments considering:
+1. Latest price action and technical developments
+2. Changes in relative strength between instruments
+3. Portfolio-level technical signals
+4. Any emerging correlations or divergences
+5. Updated risk assessment across all positions
+
+Focus on actionable insights for multi-instrument portfolio management.
