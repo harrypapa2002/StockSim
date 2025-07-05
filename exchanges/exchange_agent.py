@@ -14,10 +14,7 @@ Key Features:
 
 import asyncio
 import bisect
-import json
 import uuid
-import websockets
-import threading
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Set, List, Tuple
 
@@ -68,7 +65,6 @@ class ExchangeAgent(Agent):
         warmup_resolution: str = "1d",
         warmup_candles: int = 250,
         resolutions: Optional[List[str]] = None,
-        dashboard_port: int = 8765
     ):
         """
         Initialize the Real-Time Order Book Exchange Agent.
@@ -88,7 +84,6 @@ class ExchangeAgent(Agent):
             warmup_resolution: Candle resolution for warmup data (e.g., "1d", "1h", "5m")
             warmup_candles: Number of warmup candles (used for validation, default: 250)
             resolutions: List of resolutions to aggregate trade data into (e.g., ["1m", "15m", "1h", "1d"])
-            dashboard_port: Port for the WebSocket dashboard server (default: 8765)
         """
         super().__init__(agent_id=agent_id, rabbitmq_host=rabbitmq_host)
         self.instrument: str = instrument
@@ -134,12 +129,6 @@ class ExchangeAgent(Agent):
         
         # Multi-resolution data storage - simplified to only store completed candles
         self.resolution_candles: Dict[str, List[Dict[str, Any]]] = {res: [] for res in self.resolutions}
-        
-        # Dashboard WebSocket server
-        self.dashboard_port = dashboard_port
-        self.dashboard_clients: Set[websockets.WebSocketServerProtocol] = set()
-        self.dashboard_server = None
-        self.dashboard_task = None
 
         # Initialize technical indicators tracker for each resolution
         self.indicators_trackers: Dict[str, IndicatorsTracker] = {
@@ -155,117 +144,8 @@ class ExchangeAgent(Agent):
             self._load_fundamental_data()
 
         self.trades_output_file = trades_output_file
-        
-        # Start dashboard server
-        self._start_dashboard_server()
-        
+
         self.logger.info(f"ExchangeAgent {self.agent_id} initialized for instrument {self.instrument}.")
-
-    def _start_dashboard_server(self):
-        def runner():
-            async def dashboard_main():
-                # start and keep the server alive
-                server = await websockets.serve(
-                    self._handle_dashboard_connection,
-                    "localhost",
-                    self.dashboard_port
-                )
-                self.logger.info(f"Dashboard server started on ws://localhost:{self.dashboard_port}")
-                # hang here forever
-                await asyncio.Future()
-
-            # this creates and runs the event loop properly
-            asyncio.run(dashboard_main())
-
-        self.dashboard_task = threading.Thread(target=runner, daemon=True)
-        self.dashboard_task.start()
-
-    async def _handle_dashboard_connection(self, websocket):
-        """Handle new dashboard WebSocket connections."""
-        self.dashboard_clients.add(websocket)
-        self.logger.info(f"Dashboard client connected: {websocket.remote_address}")
-        
-        try:
-            # Send initial data to new client
-            await self._send_initial_dashboard_data(websocket)
-            
-            # Keep connection alive and handle client messages
-            async for message in websocket:
-                try:
-                    data = json.loads(message)
-                    if data.get("type") == "ping":
-                        await websocket.send(json.dumps({"type": "pong"}))
-                except json.JSONDecodeError:
-                    self.logger.warning(f"Invalid JSON from dashboard client: {message}")
-                except Exception as e:
-                    self.logger.error(f"Error handling dashboard message: {e}")
-        except websockets.exceptions.ConnectionClosed:
-            self.logger.info(f"Dashboard client disconnected: {websocket.remote_address}")
-        except Exception as e:
-            self.logger.error(f"Dashboard connection error: {e}")
-        finally:
-            self.dashboard_clients.discard(websocket)
-
-    async def _send_initial_dashboard_data(self, websocket):
-        """Send initial candle data to a new dashboard client."""
-        try:
-            initial_data = {
-                "type": "initial_data",
-                "instrument": self.instrument,
-                "resolutions": self.resolutions,
-                "candles": {
-                    resolution: candles[-100:] if len(candles) > 100 else candles  # Last 100 candles max
-                    for resolution, candles in self.resolution_candles.items()
-                },
-                "current_time": self.current_time.isoformat() if self.current_time else None,
-                "order_book": {
-                    "best_bid": self.order_book.get_best_bid()[0],
-                    "best_ask": self.order_book.get_best_ask()[0],
-                    "bid_quantity": self.order_book.get_best_bid()[1],
-                    "ask_quantity": self.order_book.get_best_ask()[1],
-                    "spread": (self.order_book.get_best_ask()[0] - self.order_book.get_best_bid()[0]) if self.order_book.get_best_bid()[0] and self.order_book.get_best_ask()[0] else None
-                }
-            }
-            await websocket.send(json.dumps(initial_data))
-        except Exception as e:
-            self.logger.error(f"Error sending initial dashboard data: {e}")
-
-    def _broadcast_candle_update(self, resolution: str, candle: Dict[str, Any]):
-        """Broadcast candle updates to all connected dashboard clients."""
-        if not self.dashboard_clients:
-            return
-
-        message = {
-            "type": "candle_update",
-            "instrument": self.instrument,
-            "resolution": resolution,
-            "candle": candle,
-            "timestamp": self.current_time.isoformat() if self.current_time else None
-        }
-
-        # Create a task to broadcast to all clients
-        asyncio.create_task(self._broadcast_to_clients(message))
-
-    async def _broadcast_to_clients(self, message: Dict[str, Any]):
-        """Broadcast message to all connected dashboard clients."""
-        if not self.dashboard_clients:
-            return
-
-        message_json = json.dumps(message)
-        disconnected_clients = set()
-
-        for client in self.dashboard_clients.copy():
-            try:
-                await client.send(message_json)
-            except websockets.exceptions.ConnectionClosed:
-                disconnected_clients.add(client)
-            except Exception as e:
-                self.logger.error(f"Error broadcasting to dashboard client: {e}")
-                disconnected_clients.add(client)
-
-        # Remove disconnected clients
-        for client in disconnected_clients:
-            self.dashboard_clients.discard(client)
 
     def _load_fundamental_data(self):
         """Load fundamental data (stocks only - not available for crypto)."""
@@ -358,9 +238,8 @@ class ExchangeAgent(Agent):
                     use_cache=True
                 )
             
-            # Store historical candles in resolution_candles for dashboard and responses
             if historical_candles:
-                # Convert to the format expected by the dashboard and responses
+                # Convert to the format expected by responses
                 formatted_candles = []
                 for candle in historical_candles:
                     # Ensure timestamp is in ISO format
@@ -1209,6 +1088,3 @@ class ExchangeAgent(Agent):
 
                 # Add the new candle to the history
                 self.resolution_candles[resolution].append(synthetic_candle.copy())
-
-                # Broadcast candle update to dashboard
-                self._broadcast_candle_update(resolution, synthetic_candle)

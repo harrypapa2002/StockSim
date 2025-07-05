@@ -16,7 +16,6 @@ exchanges:
     symbol_type: "stock"
     warmup_candles: 0               # No warmup needed
     resolutions: ["1m", "5m", "15m", "1h"]
-    dashboard_port: 8765
 
 # Historical order traders - replay orders from order files
 agents:
