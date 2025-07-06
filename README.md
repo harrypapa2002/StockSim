@@ -219,10 +219,6 @@ simulation:
 # Exchange mode: "candle" or "orderbook"
 exchange_mode: "candle"
 
-# Environment configuration
-environment:
-  rabbitmq_host: "localhost"
-  log_level: "INFO"
 ```
 
 ## 🏗️ System Architecture
