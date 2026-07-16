@@ -82,7 +82,7 @@ class TraderAgent(Agent, ABC):
             instrument_exchange_map: Mapping of instruments to their exchange IDs
             agent_id: Unique identifier for the agent (UUID generated if None)
             rabbitmq_host: RabbitMQ server hostname for messaging
-            initial_cash: Starting cash balance for trading
+            initial_cash: Starting cash balance available for trading
             initial_positions: Pre-existing positions (symbol -> quantity)
             initial_cost_basis: Cost basis for initial positions (symbol -> average price)
             action_interval_seconds: Minimum interval between scheduled actions
@@ -92,12 +92,40 @@ class TraderAgent(Agent, ABC):
             rabbitmq_host=rabbitmq_host
         )
 
-        # Core trading configuration
+        # Core trading configuration. Initial inventory is an endowed position;
+        # it contributes to starting equity without reducing configured cash.
         self.instrument_exchange_map = instrument_exchange_map
-        self.cash: float = initial_cash
+        initial_positions = {
+            str(instrument): int(quantity)
+            for instrument, quantity in (initial_positions or {}).items()
+        }
+        initial_cost_basis = {
+            str(instrument): float(cost_basis)
+            for instrument, cost_basis in (initial_cost_basis or {}).items()
+        }
+
+        initial_inventory_cost = 0.0
+        initial_prices: Dict[str, float] = {}
+        for instrument, quantity in initial_positions.items():
+            if quantity < 0:
+                raise ValueError(
+                    f"Initial position for {instrument} must be non-negative"
+                )
+            if quantity == 0:
+                continue
+            cost_basis = initial_cost_basis.get(instrument, 0.0)
+            if cost_basis <= 0:
+                raise ValueError(
+                    f"Initial position for {instrument} requires a positive cost basis"
+                )
+            initial_inventory_cost += quantity * cost_basis
+            initial_prices[instrument] = cost_basis
+
+        self.cash: float = float(initial_cash)
+        starting_equity = self.cash + initial_inventory_cost
 
         # Position tracking with FIFO accounting
-        self.long_qty: Dict[str, int] = defaultdict(int, initial_positions or {})
+        self.long_qty: Dict[str, int] = defaultdict(int, initial_positions)
         self.short_qty: Dict[str, int] = defaultdict(int)  # Stored as positive quantities
 
         # FIFO lot tracking for accurate P&L calculation
@@ -105,18 +133,21 @@ class TraderAgent(Agent, ABC):
         self.short_lots: Dict[str, deque] = defaultdict(deque)  # (quantity, short_price)
 
         # Initialize cost basis for existing positions
-        if initial_positions and initial_cost_basis:
+        if initial_positions:
             for instrument, quantity in initial_positions.items():
-                cost_basis = initial_cost_basis.get(instrument, 0.0)
-                self.long_lots[instrument].append((quantity, cost_basis))
+                if quantity > 0:
+                    self.long_lots[instrument].append(
+                        (quantity, initial_cost_basis[instrument])
+                    )
 
         # Market data and portfolio tracking
-        self.prices: Dict[str, float] = defaultdict(float)
-        self.portfolio_value: float = initial_cash
+        self.prices: Dict[str, float] = defaultdict(float, initial_prices)
+        self.portfolio_value: float = starting_equity
         self.realized_pnl: Dict[str, float] = defaultdict(float)
 
         # Performance tracking and metrics
         self.metrics = RationalityMetrics()
+        self.metrics.record_portfolio_value(self.portfolio_value)
         self.session_executed_orders: List[Dict[str, Any]] = []
         
         # Order tracking and management
@@ -135,7 +166,8 @@ class TraderAgent(Agent, ABC):
         self.next_action_time: Optional[datetime] = None
 
         self.logger.info(
-            f"TraderAgent {self.agent_id} initialized with cash balance ${self.cash:,.2f}"
+            f"TraderAgent {self.agent_id} initialized with equity ${self.portfolio_value:,.2f} "
+            f"and cash balance ${self.cash:,.2f}"
         )
 
     async def initialize(self):
@@ -161,6 +193,7 @@ class TraderAgent(Agent, ABC):
             payload: Time tick payload containing current_time and tick_id
         """
         await super().handle_time_tick(payload)
+        self._mark_to_market()
 
         # Execute all scheduled actions that are due
         due_times = sorted([
@@ -227,6 +260,17 @@ class TraderAgent(Agent, ABC):
             total_profit = sum(trade.get("realized_profit", 0) for trade in closing_trades)
             profit_per_trade = round(total_profit / len(closing_trades), 4)
 
+        unrealized_pnl = self.get_unrealized_pnl()
+        realized_pnl = self.get_realized_pnl()
+        total_pnl = {
+            instrument: round(
+                realized_pnl.get(instrument, 0.0) + unrealized_pnl.get(instrument, 0.0),
+                2,
+            )
+            for instrument in set(realized_pnl) | set(unrealized_pnl)
+        }
+        exposure = self.get_portfolio_exposure()
+
         return {
             "ROI": self.metrics.compute_roi(),
             "Sharpe Ratio": self.metrics.compute_sharpe_ratio(risk_free_rate),
@@ -244,7 +288,11 @@ class TraderAgent(Agent, ABC):
             "ROIC": self.metrics.compute_roic(),
             "Profit per Trade": profit_per_trade,
             "Last Portfolio Value": self.metrics.get_last_portfolio_value(),
-            "Risk Free Rate Used": risk_free_rate
+            "Risk Free Rate Used": risk_free_rate,
+            "Unrealized P&L": unrealized_pnl,
+            "Total P&L": total_pnl,
+            "Gross Exposure": exposure["gross_exposure"],
+            "Net Exposure": exposure["net_exposure"],
         }
 
     def _calculate_risk_free_rate(self) -> float:
@@ -374,8 +422,13 @@ class TraderAgent(Agent, ABC):
         instrument = payload.get("instrument")
         close_price = payload.get("close_price")
 
-        if instrument and close_price:
-            self.prices[instrument] = close_price
+        if instrument and close_price is not None:
+            try:
+                clean_price = float(close_price)
+            except (TypeError, ValueError):
+                clean_price = 0.0
+            if clean_price > 0:
+                self.prices[instrument] = clean_price
         self._mark_to_market()
 
     def _mark_to_market(self):
@@ -702,6 +755,12 @@ class TraderAgent(Agent, ABC):
                             self.pending_orders[order_id]["quantity"]) - executed_qty
                         )
 
+            # A fill is the freshest executable price available to this agent.
+            # Mark immediately so action ledgers and intraday metrics remain live
+            # even if the later portfolio-update message is delayed.
+            self.prices[symbol] = price
+            self._mark_to_market()
+
             self.logger.debug(
                 f"Trade executed: {symbol} {role} {executed_qty}@${price:.2f} | "
                 f"Cash: ${self.cash:,.2f}, Long: {self.long_qty[symbol]}, "
@@ -871,6 +930,47 @@ class TraderAgent(Agent, ABC):
         return {
             instrument: round(pnl, 2)
             for instrument, pnl in self.realized_pnl.items()
+        }
+
+    def get_unrealized_pnl(self) -> Dict[str, float]:
+        """Return mark-to-market P&L for all remaining long and short lots."""
+        instruments = set(self.instrument_exchange_map)
+        instruments.update(self.long_lots)
+        instruments.update(self.short_lots)
+
+        unrealized: Dict[str, float] = {}
+        for instrument in instruments:
+            mark = float(self.prices.get(instrument, 0.0) or 0.0)
+            if mark <= 0:
+                unrealized[instrument] = 0.0
+                continue
+
+            long_pnl = sum(
+                (mark - lot_price) * quantity
+                for quantity, lot_price in self.long_lots[instrument]
+            )
+            short_pnl = sum(
+                (lot_price - mark) * quantity
+                for quantity, lot_price in self.short_lots[instrument]
+            )
+            unrealized[instrument] = round(long_pnl + short_pnl, 2)
+
+        return unrealized
+
+    def get_portfolio_exposure(self) -> Dict[str, float]:
+        """Return gross and net marked notional exposure."""
+        gross_exposure = 0.0
+        net_exposure = 0.0
+        for instrument in self.instrument_exchange_map:
+            mark = float(self.prices.get(instrument, 0.0) or 0.0)
+            long_value = self.long_qty[instrument] * mark
+            short_value = self.short_qty[instrument] * mark
+            gross_exposure += long_value + short_value
+            net_exposure += long_value - short_value
+
+        return {
+            "gross_exposure": round(gross_exposure, 2),
+            "net_exposure": round(net_exposure, 2),
         }
 
     def stop(self):
