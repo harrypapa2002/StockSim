@@ -931,10 +931,20 @@ class ExchangeAgent(Agent):
         if self.order_book.trade_history:
             latest_trade = self.order_book.trade_history[-1]
             latest_close_price = latest_trade["price"]
+            latest_trade_time = latest_trade.get("timestamp")
+            latest_trade_time_str = (
+                latest_trade_time.isoformat()
+                if isinstance(latest_trade_time, datetime)
+                else str(latest_trade_time) if latest_trade_time is not None else None
+            )
 
             for agent_id in self.subscribed_agents:
                 await self.send_message(agent_id, MessageType.PORTFOLIO_UPDATE,
-                                      {"instrument": self.instrument, "close_price": latest_close_price})
+                                      {
+                                          "instrument": self.instrument,
+                                          "close_price": latest_close_price,
+                                          "data_timestamp": latest_trade_time_str,
+                                      })
 
         # Signal completion to simulation clock
         await self.publish_time(
